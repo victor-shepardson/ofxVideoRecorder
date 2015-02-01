@@ -3,6 +3,13 @@
 #include "ofMain.h"
 #include <set>
 
+#ifdef TARGET_WIN32
+#include <windows.h> 
+#include <stdio.h>
+#include <conio.h>
+#include <tchar.h>
+#endif
+
 template <typename T>
 struct lockFreeQueue {
     lockFreeQueue(){
@@ -55,7 +62,14 @@ class ofxVideoDataWriterThread : public ofThread {
 public:
     ofxVideoDataWriterThread();
 //    void setup(ofFile *file, lockFreeQueue<ofPixels *> * q);
+#if defined( TARGET_OSX ) || defined( TARGET_LINUX )
     void setup(string filePath, lockFreeQueue<ofPixels *> * q);
+#endif
+#ifdef TARGET_WIN32
+	void setup(HANDLE fileHandle, HANDLE pipeHandle, string filePath, lockFreeQueue<ofPixels *> * q);
+	HANDLE videoHandle;
+	HANDLE fileHandle;
+#endif
     void threadedFunction();
     void signal();
     bool isWriting() { return bIsWriting; }
@@ -75,7 +89,14 @@ class ofxAudioDataWriterThread : public ofThread {
 public:
     ofxAudioDataWriterThread();
 //    void setup(ofFile *file, lockFreeQueue<audioFrameShort *> * q);
+#if defined( TARGET_OSX ) || defined( TARGET_LINUX )
     void setup(string filePath, lockFreeQueue<audioFrameShort *> * q);
+#endif
+#ifdef TARGET_WIN32
+	void setup(HANDLE fileHandle, HANDLE pipeHandle, string filePath, lockFreeQueue<audioFrameShort *> * q);
+	HANDLE audioHandle;
+	HANDLE fileHandle;
+#endif
     void threadedFunction();
     void signal();
     bool isWriting() { return bIsWriting; }
@@ -147,4 +168,13 @@ private:
     static set<int> openPipes;
     static int requestPipeNumber();
     static void retirePipeNumber(int num);
+
+#ifdef TARGET_WIN32
+	HANDLE hVPipe;
+	HANDLE hVFPipe;
+	HANDLE hAPipe;
+	HANDLE hAFPipe;
+	LPTSTR vPipename;
+	LPTSTR aPipename;
+#endif
 };
