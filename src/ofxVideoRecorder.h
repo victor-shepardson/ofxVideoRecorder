@@ -66,7 +66,7 @@ public:
     void setup(string filePath, lockFreeQueue<ofPixels *> * q);
 #endif
 #ifdef TARGET_WIN32
-	void setup(HANDLE fileHandle, HANDLE pipeHandle, string filePath, lockFreeQueue<ofPixels *> * q);
+	void setup(HANDLE pipeHandle, string filePath, lockFreeQueue<ofPixels *> * q);
 	HANDLE videoHandle;
 	HANDLE fileHandle;
 #endif
@@ -93,7 +93,7 @@ public:
     void setup(string filePath, lockFreeQueue<audioFrameShort *> * q);
 #endif
 #ifdef TARGET_WIN32
-	void setup(HANDLE fileHandle, HANDLE pipeHandle, string filePath, lockFreeQueue<audioFrameShort *> * q);
+	void setup(HANDLE pipeHandle, string filePath, lockFreeQueue<audioFrameShort *> * q);
 	HANDLE audioHandle;
 	HANDLE fileHandle;
 #endif

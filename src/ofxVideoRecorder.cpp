@@ -64,14 +64,13 @@ void ofxVideoDataWriterThread::setup(string filePath, lockFreeQueue<ofPixels *> 
 }
 #endif
 #ifdef TARGET_WIN32
-void ofxVideoDataWriterThread::setup(HANDLE fileHandle_, HANDLE videoHandle_, string filePath, lockFreeQueue<ofPixels *> * q){
+void ofxVideoDataWriterThread::setup(HANDLE videoHandle_, string filePath, lockFreeQueue<ofPixels *> * q){
 	this->filePath = filePath;
 	fd = -1;
 	queue = q;
 	bIsWriting = false;
 	bClose = false;
 	videoHandle = videoHandle_;
-	fileHandle = fileHandle_;
 	startThread(true, false);
 }
 #endif
@@ -96,7 +95,7 @@ void ofxVideoDataWriterThread::threadedFunction(){
 #endif
 #ifdef TARGET_WIN32
 				DWORD b_written;
-				if (!WriteFile(fileHandle, ((char *)frame->getPixels()) + b_offset, b_remaining, &b_written, 0)) {
+				if (!WriteFile(videoHandle, ((char *)frame->getPixels()) + b_offset, b_remaining, &b_written, 0)) {
 					ofLogNotice("Video Thread") << "WriteFile to pipe failed. GLE " << GetLastError();
 				}
 #endif
@@ -127,7 +126,6 @@ void ofxVideoDataWriterThread::threadedFunction(){
 	FlushFileBuffers(videoHandle);
 	DisconnectNamedPipe(videoHandle);
 	CloseHandle(videoHandle);
-	CloseHandle(fileHandle);
 #endif
 }
 
@@ -147,13 +145,12 @@ void ofxAudioDataWriterThread::setup(string filePath, lockFreeQueue<audioFrameSh
 }
 #endif
 #ifdef TARGET_WIN32
-void ofxAudioDataWriterThread::setup(HANDLE fileHandle_, HANDLE audioHandle_, string filePath, lockFreeQueue<audioFrameShort *> *q){
+ void ofxAudioDataWriterThread::setup(HANDLE audioHandle_, string filePath, lockFreeQueue<audioFrameShort *> *q){
 	this->filePath = filePath;
 	fd = -1;
 	queue = q;
 	bIsWriting = false;
 	audioHandle = audioHandle_;
-	fileHandle = fileHandle_;
 	startThread(true, false);
 }
 #endif
@@ -178,7 +175,7 @@ void ofxAudioDataWriterThread::threadedFunction(){
 #endif
 #ifdef TARGET_WIN32
 				DWORD b_written;
-				if (!WriteFile(fileHandle, ((char *)frame->data) + b_offset, b_remaining, &b_written, 0)){
+				if (!WriteFile(audioHandle, ((char *)frame->data) + b_offset, b_remaining, &b_written, 0)){
 					ofLogNotice("Audio Thread") << "WriteFile to pipe failed. GLE " << GetLastError();
 				}
 #endif
@@ -208,7 +205,6 @@ void ofxAudioDataWriterThread::threadedFunction(){
 	FlushFileBuffers(audioHandle);
 	DisconnectNamedPipe(audioHandle);
 	CloseHandle(audioHandle);
-	CloseHandle(fileHandle);
 #endif
 }
 void ofxAudioDataWriterThread::signal(){
@@ -297,26 +293,31 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 			vPipename = TEXT("\\\\.\\pipe\\videoPipe");
 
 			hVPipe = CreateNamedPipe(
-				vPipename,             // pipe name 
-				PIPE_ACCESS_DUPLEX,       // read/write access 
-				PIPE_TYPE_MESSAGE |       // message type pipe 
-				PIPE_READMODE_MESSAGE |   // message-read mode 
-				PIPE_WAIT,                // blocking mode 
-				PIPE_UNLIMITED_INSTANCES, // max. instances  
-				1024,                  // output buffer size 
-				1024,                  // input buffer size 
-				0,                        // client time-out 
-				NULL);
+				vPipename, // name of the pipe
+				PIPE_ACCESS_OUTBOUND, // 1-way pipe -- send only
+				PIPE_TYPE_BYTE, // send data as a byte stream
+				1, // only allow 1 instance of this pipe
+				0, // no outbound buffer
+				0, // no inbound buffer
+				0, // use default wait time
+				NULL // use default security attributes
+				);
 
-			hVFPipe = CreateFileW(
-				vPipename,   // pipe name 
-				GENERIC_READ |  // read and write access 
-				GENERIC_WRITE,
-				0,              // no sharing 
-				NULL,           // default security attributes
-				OPEN_EXISTING,  // opens existing pipe 
-				0,              // default attributes 
-				NULL);          // no template file 
+			if (!(hVPipe != INVALID_HANDLE_VALUE)){
+				// Exit if an error other than ERROR_PIPE_BUSY occurs. 
+
+				if (GetLastError() != ERROR_PIPE_BUSY)
+				{
+					ofLogError("Video Recorder Pipe") << "Could not open audio pipe.";
+				}
+
+				// All pipe instances are busy, so wait for 20 seconds. 
+
+				if (!WaitNamedPipe(vPipename, 20000))
+				{
+					ofLogError("Video Recorder Pipe") << "Could not open pipe: 20 second wait timed out.";
+				}
+			}
 
 #endif
 		}
@@ -337,40 +338,31 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 #ifdef TARGET_WIN32
 			//ofFile(audioPipePath, ofFile::ReadWrite);
 			aPipename = TEXT("\\\\.\\pipe\\audioPipe");
+			
 			hAPipe = CreateNamedPipe(
-				aPipename,             // pipe name 
-				PIPE_ACCESS_DUPLEX,       // read/write access 
-				PIPE_TYPE_MESSAGE |       // message type pipe 
-				PIPE_READMODE_MESSAGE |   // message-read mode 
-				PIPE_WAIT,                // blocking mode 
-				PIPE_UNLIMITED_INSTANCES, // max. instances  
-				1024,                  // output buffer size 
-				1024,                  // input buffer size 
-				0,                        // client time-out 
-				NULL);
-			hAFPipe = CreateFileW(
-				aPipename,   // pipe name 
-				GENERIC_READ |  // read and write access 
-				GENERIC_WRITE,
-				0,              // no sharing 
-				NULL,           // default security attributes
-				OPEN_EXISTING,  // opens existing pipe 
-				0,              // default attributes 
-				NULL);          // no template file 
+				aPipename,
+				PIPE_ACCESS_OUTBOUND, // 1-way pipe -- send only
+				PIPE_TYPE_BYTE, // send data as a byte stream
+				1, // only allow 1 instance of this pipe
+				0, // no outbound buffer
+				0, // no inbound buffer
+				0, // use default wait time
+				NULL // use default security attributes
+				);
 
 			if (!(hAPipe != INVALID_HANDLE_VALUE)){
 				// Exit if an error other than ERROR_PIPE_BUSY occurs. 
 
 				if (GetLastError() != ERROR_PIPE_BUSY)
 				{
-					_tprintf(TEXT("Could not open pipe. GLE=%d\n"), GetLastError());
+					ofLogError("Video Recorder Pipe") << "Could not open audio pipe.";
 				}
 
 				// All pipe instances are busy, so wait for 20 seconds. 
 
 				if (!WaitNamedPipe(aPipename, 20000))
 				{
-					printf("Could not open pipe: 20 second wait timed out.");
+					ofLogError("Video Recorder Pipe") << "Could not open pipe: 20 second wait timed out.";
 				}
 			}
 
@@ -400,7 +392,7 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 	//cerr << cmd.str();
 #endif
 #ifdef TARGET_WIN32
-	cmd << ffmpegLocation << " -y ";
+	cmd << ffmpegLocation << "ffmpeg" << " -y ";
 
 	if (bRecordAudio){
 		cmd << " -acodec pcm_s16le -f s16le -ar " << sampleRate << " -ac " << audioChannels << " -i " << "\\\\.\\pipe\\audioPipe";
@@ -409,18 +401,18 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 		cmd << " -an";
 	}
 	if (bRecordVideo){ // video input options and file
-		cmd << " -r " << fps << " -s " << w << "x" << h << " -f rawvideo -pix_fmt " << pixelFormat << " -i " << "\\\\.\\pipe\\videoPipe" << " -r " << fps;
+		cmd << " -r " << fps << " -s " << w << "x" << h << " -f rawvideo -pix_fmt " << pixelFormat << " -i " << "\\\\.\\pipe\\videoPipe";
 	}
 	else { // no video stream
 		cmd << " -vn";
 	}
-	cmd << " " + outputString + "' &";
+	cmd << " " << outputString;
 
 	//cerr << cmd.str();
 #endif
 
 
-	cout << "Command" << cmd.str() << endl;
+	cout << "Command " << cmd.str() << endl;
 	ffmpegThread.setup(cmd.str()); // start ffmpeg thread, will wait for input pipes to be opened
 
 	if (bRecordAudio){
@@ -430,17 +422,16 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 		audioThread.setup(audioPipePath, &audioFrames);
 #endif
 #ifdef TARGET_WIN32
-		DWORD dwMode = PIPE_READMODE_MESSAGE;
-		bool fSuccess = SetNamedPipeHandleState(
-			hAPipe,    // pipe handle 
-			&dwMode,  // new pipe mode 
-			NULL,     // don't set maximum bytes 
-			NULL);    // don't set maximum time 
+		//this blocks, so we have to call it after ffmpeg is listening for a pipe?
+		bool fSuccess = ConnectNamedPipe(hAPipe, NULL);
 		if (!fSuccess)
 		{
 			ofLogNotice("Audio Pipe") << "SetNamedPipeHandleState failed. GLE " << GetLastError();
 		}
-		audioThread.setup(hAFPipe, hAPipe, ofToString(aPipename), &audioFrames);
+		else {
+			cout << "\n==========================\nAudio Pipe Connected Successfully\n==========================\n" << endl;
+		}
+		//audioThread.setup(hAFPipe, hAPipe, ofToString(aPipename), &audioFrames);
 #endif
 	}
 	if (bRecordVideo){
@@ -450,19 +441,21 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 		videoThread.setup(videoPipePath, &frames);
 #endif
 #ifdef TARGET_WIN32
-		DWORD dwMode = PIPE_READMODE_MESSAGE;
-		bool fSuccess = SetNamedPipeHandleState(
-			hVPipe,    // pipe handle 
-			&dwMode,  // new pipe mode 
-			NULL,     // don't set maximum bytes 
-			NULL);    // don't set maximum time 
+		//this blocks, so we have to call it after ffmpeg is listening for a pipe?
+		cout << "connect video pipe" << endl;
+		bool fSuccess = ConnectNamedPipe(hVPipe, NULL);
 		if (!fSuccess)
 		{
 			ofLogNotice("Video Pipe") << "SetNamedPipeHandleState failed. GLE " << GetLastError();
 		}
-		videoThread.setup(hVFPipe, hVPipe, ofToString(vPipename), &frames);
+		else {
+			cout << "\n==========================\nVideo Pipe Connected Successfully\n==========================\n" << endl;
+		}
+		//videoThread.setup(hVFPipe, hVPipe, ofToString(vPipename), &frames);
 #endif
 	}
+	if (bRecordAudio) audioThread.setup(hAPipe, ofToString(aPipename), &audioFrames);
+	if (bRecordVideo) videoThread.setup(hVPipe, ofToString(vPipename), &frames);
 	bIsInitialized = true;
 
 	return bIsInitialized;
