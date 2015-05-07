@@ -115,12 +115,15 @@ public:
     bool setup(string fname, int w, int h, float fps, int sampleRate=0, int channels=0);
 	bool setupCustomOutput(int w, int h, float fps, string outputLocation);
 	bool setupCustomOutput(int w, int h, float fps, int sampleRate, int channels, string outputLocation);
+	bool runCustomScript(string script);
     void setQuality(ofImageQualityType q);
     void addFrame(const ofPixels &pixels);
     void addAudioSamples(float * samples, int bufferSize, int numChannels);
     void close();
 
     void setFfmpegLocation(string loc) { ffmpegLocation = loc; }
+	void setMovFileExtension(string extension) { movFileExt = extension; }
+	void setAudioFileExtension(string extension) { audioFileExt = extension; }
     void setVideoCodec(string codec) { videoCodec = codec; }
     void setAudioCodec(string codec) { audioCodec = codec; }
     void setVideoBitrate(string bitrate) { videoBitrate = bitrate; }
@@ -141,6 +144,8 @@ public:
 private:
 	string filePath;
     string fileName;
+	string movFileExt;
+	string audioFileExt;
     string videoPipePath, audioPipePath;
     string ffmpegLocation;
     string videoCodec, audioCodec, videoBitrate, audioBitrate, pixelFormat;
@@ -157,6 +162,9 @@ private:
     ofxVideoDataWriterThread videoThread;
     ofxAudioDataWriterThread audioThread;
     execThread ffmpegThread;
+	execThread ffmpegVideoThread;
+	execThread ffmpegAudioThread;
+	bool vThreadRunning, aThreadRunning;
     int videoPipeFd, audioPipeFd;
     int pipeNumber;
 

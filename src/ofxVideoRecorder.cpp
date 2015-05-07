@@ -42,7 +42,7 @@ execThread::execThread(){
 
 void execThread::setup(string command){
 	execCommand = command;
-	startThread(true, false);
+	startThread(true);
 }
 
 void execThread::threadedFunction(){
@@ -60,7 +60,7 @@ void ofxVideoDataWriterThread::setup(string filePath, lockFreeQueue<ofPixels *> 
 	queue = q;
 	bIsWriting = false;
 	bClose = false;
-	startThread(true, false);
+	startThread(true);
 }
 #endif
 #ifdef TARGET_WIN32
@@ -69,7 +69,7 @@ void ofxVideoDataWriterThread::setup(HANDLE videoHandle_, lockFreeQueue<ofPixels
 	bIsWriting = false;
 	bClose = false;
 	videoHandle = videoHandle_;
-	startThread(true, false);
+	startThread(true);
 }
 #endif
 void ofxVideoDataWriterThread::threadedFunction(){
@@ -139,7 +139,7 @@ void ofxAudioDataWriterThread::setup(string filePath, lockFreeQueue<audioFrameSh
 	fd = -1;
 	queue = q;
 	bIsWriting = false;
-	startThread(true, false);
+	startThread(true);
 }
 #endif
 #ifdef TARGET_WIN32
@@ -147,7 +147,7 @@ void ofxAudioDataWriterThread::setup(HANDLE audioHandle_, lockFreeQueue<audioFra
 	queue = q;
 	bIsWriting = false;
 	audioHandle = audioHandle_;
-	startThread(true, false);
+	startThread(true);
 }
 #endif
 void ofxAudioDataWriterThread::threadedFunction(){
@@ -217,6 +217,10 @@ ofxVideoRecorder::ofxVideoRecorder()
 	videoBitrate = "2000k";
 	audioBitrate = "128k";
 	pixelFormat = "rgb24";
+	movFileExt = ".mp4";
+	audioFileExt = ".m4a";
+	aThreadRunning = false;
+	vThreadRunning = false;
 }
 
 bool ofxVideoRecorder::setup(string fname, int w, int h, float fps, int sampleRate, int channels)
@@ -268,6 +272,9 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 #if defined( TARGET_OSX ) || defined( TARGET_LINUX )
 		// recording video, create a FIFO pipe
 		videoPipePath = ofFilePath::getAbsolutePath("ofxvrpipe" + ofToString(pipeNumber));
+
+		ofStringReplace(videoPipePath, " ", "\\ ");
+
 		if (!ofFile::doesFileExist(videoPipePath)){
 			string cmd = "bash --login -c 'mkfifo " + videoPipePath + "'";
 			system(cmd.c_str());
@@ -281,7 +288,7 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 			PIPE_ACCESS_OUTBOUND, // 1-way pipe -- send only
 			PIPE_TYPE_BYTE, // send data as a byte stream
 			1, // only allow 1 instance of this pipe
-			512, // outbound buffer
+			0, // outbound buffer defaults to system default
 			0, // no inbound buffer
 			0, // use default wait time
 			NULL // use default security attributes
@@ -309,6 +316,9 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 #if defined( TARGET_OSX ) || defined( TARGET_LINUX )
 		// recording video, create a FIFO pipe
 		audioPipePath = ofFilePath::getAbsolutePath("ofxarpipe" + ofToString(pipeNumber));
+
+		ofStringReplace(audioPipePath, " ", "\\ ");
+
 		if (!ofFile::doesFileExist(audioPipePath)){
 
 			string cmd = "bash --login -c 'mkfifo " + audioPipePath + "'";
@@ -323,7 +333,7 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 			PIPE_ACCESS_OUTBOUND, // 1-way pipe -- send only
 			PIPE_TYPE_BYTE, // send data as a byte stream
 			1, // only allow 1 instance of this pipe
-			512, // outbound buffer
+			0, // outbound buffer defaults to system default
 			0, // no inbound buffer
 			0, // use default wait time
 			NULL // use default security attributes
@@ -369,73 +379,127 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 
 	cmd << " " + outputString + "' &";
 
-#endif
-#ifdef TARGET_WIN32
-	cmd << ffmpegLocation << " -y ";
-
-	if (bRecordAudio){
-		cmd << " -acodec " << audioCodec << " -f s16le -ar " << sampleRate << " -ac " << audioChannels << " -i " << "\\\\.\\pipe\\audioPipe";
-	}
-	else { // no audio stream
-		cmd << " -an";
-	}
-	if (bRecordVideo){ // video input options and file
-		cmd << " -r " << fps << " -s " << w << "x" << h << " -f rawvideo -pix_fmt " << pixelFormat << " -i " << "\\\\.\\pipe\\videoPipe";
-	}
-	else { // no video stream
-		cmd << " -vn";
-	}
-	if(bRecordAudio)
-		cmd << " -b:a " << audioBitrate;
-	if (bRecordVideo)
-		cmd << " -vcodec " << videoCodec << " -b:v " << videoBitrate;
-	cmd << " " << outputLocation;
-
-#endif
-
-
 	ofLogNotice("FFMpeg Command") << cmd.str() << endl;
+
 	ffmpegThread.setup(cmd.str()); // start ffmpeg thread, will wait for input pipes to be opened
 
 	if (bRecordAudio){
-#if defined( TARGET_OSX ) || defined( TARGET_LINUX )
 		//        audioPipeFd = ::open(audioPipePath.c_str(), O_WRONLY);
 		audioThread.setup(audioPipePath, &audioFrames);
+	}
+	if (bRecordVideo){
+		//        videoPipeFd = ::open(videoPipePath.c_str(), O_WRONLY);
+
+		videoThread.setup(videoPipePath, &frames);
+	}
+
 #endif
 #ifdef TARGET_WIN32
-		//this blocks, so we have to call it after ffmpeg is listening for a pipe
-		bool fSuccess = ConnectNamedPipe(hAPipe, NULL);
+	//evidently there are issues with multiple named pipes http://trac.ffmpeg.org/ticket/1663
+
+	if (bRecordAudio && bRecordVideo){
+		bool fSuccess;
+
+		// Audio Thread
+		
+		stringstream aCmd;
+		aCmd << ffmpegLocation << " -y " << " -f s16le -acodec " << audioCodec << " -ar " << sampleRate << " -ac " << audioChannels << " -i " << "\\\\.\\pipe\\audioPipe" << " -b:a " << audioBitrate << " " << outputLocation << "_atemp" << audioFileExt;
+		ffmpegAudioThread.setup(aCmd.str());
+		ofLogNotice("FFMpeg Command") << aCmd.str() << endl;
+
+		fSuccess = ConnectNamedPipe(hAPipe, NULL);
 		if (!fSuccess)
 		{
 			ofLogError("Audio Pipe") << "SetNamedPipeHandleState failed. GLE " << GetLastError();
 		}
 		else {
 			ofLogNotice("Audio Pipe") << "\n==========================\nAudio Pipe Connected Successfully\n==========================\n" << endl;
+			audioThread.setup(hAPipe, &audioFrames);
 		}
-#endif
-	}
-	if (bRecordVideo){
-#if defined( TARGET_OSX ) || defined( TARGET_LINUX )
-		//        videoPipeFd = ::open(videoPipePath.c_str(), O_WRONLY);
 
-		videoThread.setup(videoPipePath, &frames);
-#endif
-#ifdef TARGET_WIN32
-		//this blocks, so we have to call it after ffmpeg is listening for a pipe
-		bool fSuccess = ConnectNamedPipe(hVPipe, NULL);
+		// Video Thread
+
+		stringstream vCmd;
+		vCmd << ffmpegLocation << " -y " << " -r " << fps << " -s " << w << "x" << h << " -f rawvideo -pix_fmt " << pixelFormat << " -i " << "\\\\.\\pipe\\videoPipe" << " -vcodec " << videoCodec << " -b:v " << videoBitrate << " " << outputLocation << "_vtemp" << movFileExt;
+		ffmpegVideoThread.setup(vCmd.str());
+		ofLogNotice("FFMpeg Command") << vCmd.str() << endl;
+
+		fSuccess = ConnectNamedPipe(hVPipe, NULL);
 		if (!fSuccess)
 		{
 			ofLogError("Video Pipe") << "SetNamedPipeHandleState failed. GLE " << GetLastError();
 		}
 		else {
 			ofLogNotice("Video Pipe") << "\n==========================\nVideo Pipe Connected Successfully\n==========================\n" << endl;
+			videoThread.setup(hVPipe, &frames);
 		}
-#endif
 	}
-#ifdef TARGET_WIN32
-	if (bRecordVideo) videoThread.setup(hVPipe, &frames);
-	if (bRecordAudio) audioThread.setup(hAPipe, &audioFrames);
+	else {
+		cmd << ffmpegLocation << " -y ";
+		if (bRecordAudio){
+			cmd << " -f s16le -acodec " << audioCodec << " -ar " << sampleRate << " -ac " << audioChannels << " -i " << "\\\\.\\pipe\\audioPipe";
+		}
+		else { // no audio stream
+			cmd << " -an";
+		}
+		if (bRecordVideo){ // video input options and file
+			cmd << " -r " << fps << " -s " << w << "x" << h << " -f rawvideo -pix_fmt " << pixelFormat << " -i " << "\\\\.\\pipe\\videoPipe";
+		}
+		else { // no video stream
+			cmd << " -vn";
+		}
+		if (bRecordAudio)
+			cmd << " -b:a " << audioBitrate;
+		if (bRecordVideo)
+			cmd << " -vcodec " << videoCodec << " -b:v " << videoBitrate;
+		cmd << " " << outputLocation << movFileExt;
+
+		ofLogNotice("FFMpeg Command") << cmd.str() << endl;
+
+		ffmpegThread.setup(cmd.str()); // start ffmpeg thread, will wait for input pipes to be opened
+
+		if (bRecordAudio){
+			//this blocks, so we have to call it after ffmpeg is listening for a pipe
+			bool fSuccess = ConnectNamedPipe(hAPipe, NULL);
+			if (!fSuccess)
+			{
+				ofLogError("Audio Pipe") << "SetNamedPipeHandleState failed. GLE " << GetLastError();
+			}
+			else {
+				ofLogNotice("Audio Pipe") << "\n==========================\nAudio Pipe Connected Successfully\n==========================\n" << endl;
+				audioThread.setup(hAPipe, &audioFrames);
+			}
+		}
+		if (bRecordVideo){
+			//this blocks, so we have to call it after ffmpeg is listening for a pipe
+			bool fSuccess = ConnectNamedPipe(hVPipe, NULL);
+			if (!fSuccess)
+			{
+				ofLogError("Video Pipe") << "SetNamedPipeHandleState failed. GLE " << GetLastError();
+			}
+			else {
+				ofLogNotice("Video Pipe") << "\n==========================\nVideo Pipe Connected Successfully\n==========================\n" << endl;
+				videoThread.setup(hVPipe, &frames);
+			}
+		}
+
+	}
 #endif
+
+	bIsInitialized = true;
+
+	return bIsInitialized;
+}
+
+bool ofxVideoRecorder::runCustomScript(string script)
+{
+	stringstream cmd;
+	cmd << ffmpegLocation << " -y ";
+
+
+	ofLogNotice("FFMpeg Command") << script << endl;
+	ffmpegThread.setup(script);
+
 	bIsInitialized = true;
 
 	return bIsInitialized;
@@ -511,6 +575,8 @@ void ofxVideoRecorder::close()
 	}
 
 	retirePipeNumber(pipeNumber);
+
+	ffmpegThread.waitForThread();
 #endif
 #ifdef TARGET_WIN32 
 	if (bRecordVideo) {
@@ -519,19 +585,45 @@ void ofxVideoRecorder::close()
 	if (bRecordAudio) {
 		audioThread.close();
 	}
-#endif
+
 	//at this point all data that ffmpeg wants should have been consumed
 	// one of the threads may still be trying to write a frame,
 	// but once close() gets called they will exit the non_blocking write loop
 	// and hopefully close successfully
 
-	bIsInitialized = false;
+	if (bRecordAudio && bRecordVideo){
+		ffmpegAudioThread.waitForThread(); 
+		ffmpegVideoThread.waitForThread();
 
-	//we are getting an invalid argument. Is it because the pipe closes first? closing the pipe afterwards causes an error
-	ffmpegThread.waitForThread();
+		//need to do one last script here to join the audio and video recordings
+
+		stringstream finalCmd;
+
+		/*finalCmd << ffmpegLocation << " -y " << " -i " << filePath << "_vtemp" << movFileExt << " -i " << filePath << "_atemp" << movFileExt << " \\ ";
+		finalCmd << "-filter_complex \"[0:0] [1:0] concat=n=2:v=1:a=1 [v] [a]\" \\";
+		finalCmd << "-map \"[v]\" -map \"[a]\" ";
+		finalCmd << " -vcodec " << videoCodec << " -b:v " << videoBitrate << " -b:a " << audioBitrate << " ";
+		finalCmd << filePath << movFileExt;*/
+
+		finalCmd << ffmpegLocation << " -y " << " -i " << filePath << "_vtemp" << movFileExt << " -i " << filePath << "_atemp" << audioFileExt << " ";
+		finalCmd << "-c:v copy -c:a copy -strict experimental ";
+		finalCmd << filePath << movFileExt;
+
+		ofLogNotice("FFMpeg Merge") << "\n==============================================\n Final Command \n==============================================\n";
+		ofLogNotice("FFMpeg Merge") << finalCmd.str();
+		ffmpegThread.setup(finalCmd.str());
+
+	}
+	else
+		ffmpegThread.waitForThread();
+
+	/*stringstream removeCmd;
+	removeCmd << "DEL " << filePath << "_vtemp" << movFileExt << " " << filePath << "_atemp" << audioFileExt;
+	system(removeCmd.str().c_str());*/
+#endif
 	// TODO: kill ffmpeg process if its taking too long to close for whatever reason.
-	ofLogNotice("ofxVideoRecorder") << "Closed ffmpeg";
-
+	ofLogNotice("ofxVideoRecorder") << "\n==============================================\n Closed ffmpeg \n==============================================\n";
+	bIsInitialized = false;
 
 }
 
