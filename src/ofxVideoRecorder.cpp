@@ -112,7 +112,7 @@ void ofxVideoDataWriterThread::threadedFunction(){
 			delete frame;
 		}
 		else{
-			condition.wait(conditionMutex, 1000);
+			condition.wait(conditionMutex);// , 1000);
 			int test = 0;
 		}
 	}
@@ -190,7 +190,7 @@ void ofxAudioDataWriterThread::threadedFunction(){
 			delete frame;
 		}
 		else{
-			condition.wait(conditionMutex, 1000);
+			condition.wait(conditionMutex);// , 1000);
 		}
 	}
 
@@ -281,7 +281,11 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 		}
 #endif
 #ifdef TARGET_WIN32
-		vPipename = TEXT("\\\\.\\pipe\\videoPipe");
+
+		char vpip[128];
+		int num = ofRandom(1024);
+		sprintf(vpip, "\\\\.\\pipe\\videoPipe%d", num);
+		vPipename = convertCharArrayToLPCWSTR(vpip);
 
 		hVPipe = CreateNamedPipe(
 			vPipename, // name of the pipe
@@ -326,7 +330,12 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 		}
 #endif
 #ifdef TARGET_WIN32
-		aPipename = TEXT("\\\\.\\pipe\\audioPipe");
+
+
+		char apip[128];
+		int num = ofRandom(1024);
+		sprintf(apip, "\\\\.\\pipe\\videoPipe%d", num);
+		aPipename = convertCharArrayToLPCWSTR(apip);
 
 		hAPipe = CreateNamedPipe(
 			aPipename,
@@ -403,7 +412,9 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 		// Audio Thread
 		
 		stringstream aCmd;
-		aCmd << ffmpegLocation << " -y " << " -f s16le -acodec " << audioCodec << " -ar " << sampleRate << " -ac " << audioChannels << " -i " << "\\\\.\\pipe\\audioPipe" << " -b:a " << audioBitrate << " " << outputLocation << "_atemp" << audioFileExt;
+		aCmd << ffmpegLocation << " -y " << " -f s16le -acodec " << audioCodec << " -ar " << sampleRate << " -ac " << audioChannels;
+		aCmd << " -i " << convertWideToNarrow(aPipename) << " -b:a " << audioBitrate << " " << outputLocation << "_atemp" << audioFileExt;
+
 		ffmpegAudioThread.setup(aCmd.str());
 		ofLogNotice("FFMpeg Command") << aCmd.str() << endl;
 
@@ -420,7 +431,9 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 		// Video Thread
 
 		stringstream vCmd;
-		vCmd << ffmpegLocation << " -y " << " -r " << fps << " -s " << w << "x" << h << " -f rawvideo -pix_fmt " << pixelFormat << " -i " << "\\\\.\\pipe\\videoPipe" << " -vcodec " << videoCodec << " -b:v " << videoBitrate << " " << outputLocation << "_vtemp" << movFileExt;
+		vCmd << ffmpegLocation << " -y " << " -r " << fps << " -s " << w << "x" << h << " -f rawvideo -pix_fmt " << pixelFormat;
+		vCmd << " -i " << convertWideToNarrow(vPipename) << " -vcodec " << videoCodec << " -b:v " << videoBitrate << " " << outputLocation << "_vtemp" << movFileExt;
+		
 		ffmpegVideoThread.setup(vCmd.str());
 		ofLogNotice("FFMpeg Command") << vCmd.str() << endl;
 
@@ -609,17 +622,20 @@ void ofxVideoRecorder::close()
 		finalCmd << "-c:v copy -c:a copy -strict experimental ";
 		finalCmd << filePath << movFileExt;
 
-		ofLogNotice("FFMpeg Merge") << "\n==============================================\n Final Command \n==============================================\n";
+		ofLogNotice("FFMpeg Merge") << "\n==============================================\n Merge Command \n==============================================\n";
 		ofLogNotice("FFMpeg Merge") << finalCmd.str();
-		ffmpegThread.setup(finalCmd.str());
+		//ffmpegThread.setup(finalCmd.str());
+		system(finalCmd.str().c_str());
+
+		//delete the unmerged files
+		stringstream removeCmd;
+		removeCmd << "DEL " << filePath << "_vtemp" << movFileExt << " " << filePath << "_atemp" << audioFileExt;
+		system(removeCmd.str().c_str());
 
 	}
-	else
-		ffmpegThread.waitForThread();
+		
+	ffmpegThread.waitForThread();
 
-	/*stringstream removeCmd;
-	removeCmd << "DEL " << filePath << "_vtemp" << movFileExt << " " << filePath << "_atemp" << audioFileExt;
-	system(removeCmd.str().c_str());*/
 #endif
 	// TODO: kill ffmpeg process if its taking too long to close for whatever reason.
 	ofLogNotice("ofxVideoRecorder") << "\n==============================================\n Closed ffmpeg \n==============================================\n";
