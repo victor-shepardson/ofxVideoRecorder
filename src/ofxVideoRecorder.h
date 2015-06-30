@@ -112,14 +112,23 @@ class ofxVideoRecorder
 {
 public:
     ofxVideoRecorder();
+<<<<<<< HEAD
     bool setup(string fname, int w, int h, float fps, int sampleRate=0, int channels=0);
 	bool setupCustomOutput(int w, int h, float fps, string outputLocation);
 	bool setupCustomOutput(int w, int h, float fps, int sampleRate, int channels, string outputLocation);
 	bool runCustomScript(string script);
+=======
+    bool setup(string fname, int w, int h, float fps, int sampleRate=0, int channels=0, bool sysClockSync=false, bool silent=false);
+    bool setupCustomOutput(int w, int h, float fps, string outputString, bool sysClockSync=false, bool silent=false);
+    bool setupCustomOutput(int w, int h, float fps, int sampleRate, int channels, string outputString, bool sysClockSync=false, bool silent=false);
+>>>>>>> timscaffidi/master
     void setQuality(ofImageQualityType q);
     void addFrame(const ofPixels &pixels);
     void addAudioSamples(float * samples, int bufferSize, int numChannels);
+
+    void start();
     void close();
+    void setPaused(bool bPause);
 
     void setFfmpegLocation(string loc) { ffmpegLocation = loc; }
 	void setMovFileExtension(string extension) { movFileExt = extension; }
@@ -133,9 +142,16 @@ public:
         pixelFormat = pixelF;
     };
 
+    unsigned long long getNumVideoFramesRecorded() { return videoFramesRecorded; }
+    unsigned long long getNumAudioSamplesRecorded() { return audioSamplesRecorded; }
+
     int getVideoQueueSize(){ return frames.size(); }
     int getAudioQueueSize(){ return audioFrames.size(); }
+
     bool isInitialized(){ return bIsInitialized; }
+    bool isRecording() { return bIsRecording; };
+    bool isPaused() { return bIsPaused; };
+    bool isSyncAgainstSysClock() { return bSysClockSync; };
 
     string getMoviePath(){ return filePath; }
     int getWidth(){return width;}
@@ -178,10 +194,21 @@ private:
     string videoCodec, audioCodec, videoBitrate, audioBitrate, pixelFormat;
     int width, height, sampleRate, audioChannels;
     float frameRate;
+
     bool bIsInitialized;
     bool bRecordAudio;
     bool bRecordVideo;
+    bool bIsRecording;
+    bool bIsPaused;
     bool bFinishing;
+    bool bIsSilent;
+
+    bool bSysClockSync;
+    float startTime;
+    float recordingDuration;
+    float totalRecordingDuration;
+    float systemClock();
+
     lockFreeQueue<ofPixels *> frames;
     lockFreeQueue<audioFrameShort *> audioFrames;
     unsigned long long audioSamplesRecorded;
