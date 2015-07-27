@@ -15,7 +15,7 @@
 #endif
 #include <fcntl.h>
 
-int setNonblocking(int fd)
+int setNonBlocking(int fd)
 {
 #if defined( TARGET_OSX ) || defined( TARGET_LINUX )
 	int flags;
@@ -41,8 +41,13 @@ execThread::execThread(){
 }
 
 void execThread::setup(string command){
+<<<<<<< HEAD
 	execCommand = command;
 	startThread(true);
+=======
+    execCommand = command;
+    startThread(true);
+>>>>>>> timscaffidi/master
 }
 
 void execThread::threadedFunction(){
@@ -55,12 +60,21 @@ void execThread::threadedFunction(){
 ofxVideoDataWriterThread::ofxVideoDataWriterThread(){};
 #if defined( TARGET_OSX ) || defined( TARGET_LINUX )
 void ofxVideoDataWriterThread::setup(string filePath, lockFreeQueue<ofPixels *> * q){
+<<<<<<< HEAD
 	this->filePath = filePath;
 	fd = -1;
 	queue = q;
 	bIsWriting = false;
 	bClose = false;
 	startThread(true);
+=======
+    this->filePath = filePath;
+    fd = -1;
+    queue = q;
+    bIsWriting = false;
+    bClose = false;
+    startThread(true);
+>>>>>>> timscaffidi/master
 }
 #endif
 #ifdef TARGET_WIN32
@@ -73,6 +87,7 @@ void ofxVideoDataWriterThread::setup(HANDLE videoHandle_, lockFreeQueue<ofPixels
 }
 #endif
 void ofxVideoDataWriterThread::threadedFunction(){
+<<<<<<< HEAD
 #if defined( TARGET_OSX ) || defined( TARGET_LINUX )
 	if (fd == -1){
 		fd = ::open(filePath.c_str(), O_WRONLY);
@@ -125,21 +140,87 @@ void ofxVideoDataWriterThread::threadedFunction(){
 	DisconnectNamedPipe(videoHandle);
 	CloseHandle(videoHandle);
 #endif
+=======
+    if(fd == -1){
+        fd = ::open(filePath.c_str(), O_WRONLY);
+    }
+
+    while(isThreadRunning())
+    {
+        ofPixels * frame = NULL;
+        if(queue->Consume(frame) && frame){
+            bIsWriting = true;
+            int b_offset = 0;
+            int b_remaining = frame->getWidth()*frame->getHeight()*frame->getBytesPerPixel();
+            
+            while(b_remaining > 0 && isThreadRunning())
+            {
+                errno = 0;
+                
+                int b_written = ::write(fd, ((char *)frame->getPixels())+b_offset, b_remaining);
+                
+                if(b_written > 0){
+                    b_remaining -= b_written;
+                    b_offset += b_written;
+                    if (b_remaining != 0) {
+                        ofLogWarning("ofxVideoDataWriterThread") << ofGetTimestampString("%H:%M:%S:%i") << " - b_remaining is not 0 -> " << b_written << " - " << b_remaining << " - " << b_offset << ".";
+                        //break;
+                    }
+                }
+                else if (b_written < 0) {
+                    ofLogError("ofxVideoDataWriterThread") << ofGetTimestampString("%H:%M:%S:%i") << " - write to PIPE failed with error -> " << errno << " - " << strerror(errno) << ".";
+                    break;
+                }
+                else {
+                    if(bClose){
+                        ofLogVerbose("ofxVideoDataWriterThread") << ofGetTimestampString("%H:%M:%S:%i") << " - Nothing was written and bClose is TRUE.";
+                        break; // quit writing so we can close the file
+                    }
+                    ofLogWarning("ofxVideoDataWriterThread") << ofGetTimestampString("%H:%M:%S:%i") << " - Nothing was written. Is this normal?";
+                }
+                
+                if (!isThreadRunning()) {
+                    ofLogWarning("ofxVideoDataWriterThread") << ofGetTimestampString("%H:%M:%S:%i") << " - The thread is not running anymore let's get out of here!";
+                }
+            }
+            bIsWriting = false;
+            frame->clear();
+            delete frame;
+        }
+        else{
+            condition.wait(conditionMutex);
+        }
+    }
+
+    ::close(fd);
+>>>>>>> timscaffidi/master
 }
 
 void ofxVideoDataWriterThread::signal(){
 	condition.signal();
 }
 
+void ofxVideoDataWriterThread::setPipeNonBlocking(){
+    setNonBlocking(fd);
+}
+
 //===============================
 ofxAudioDataWriterThread::ofxAudioDataWriterThread(){};
 #if defined( TARGET_OSX ) || defined( TARGET_LINUX )
 void ofxAudioDataWriterThread::setup(string filePath, lockFreeQueue<audioFrameShort *> *q){
+<<<<<<< HEAD
 	this->filePath = filePath;
 	fd = -1;
 	queue = q;
 	bIsWriting = false;
 	startThread(true);
+=======
+    this->filePath = filePath;
+    fd = -1;
+    queue = q;
+    bIsWriting = false;
+    startThread(true);
+>>>>>>> timscaffidi/master
 }
 #endif
 #ifdef TARGET_WIN32
@@ -205,6 +286,10 @@ void ofxAudioDataWriterThread::threadedFunction(){
 }
 void ofxAudioDataWriterThread::signal(){
 	condition.signal();
+}
+
+void ofxAudioDataWriterThread::setPipeNonBlocking(){
+    setNonBlocking(fd);
 }
 
 //===============================
@@ -601,11 +686,9 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
     ffmpegThread.setup(cmd.str()); // start ffmpeg thread, will wait for input pipes to be opened
 
     if(bRecordAudio){
-//        audioPipeFd = ::open(audioPipePath.c_str(), O_WRONLY);
         audioThread.setup(audioPipePath, &audioFrames);
     }
     if(bRecordVideo){
-//        videoPipeFd = ::open(videoPipePath.c_str(), O_WRONLY);
         videoThread.setup(videoPipePath, &frames);
     }
 
@@ -861,8 +944,8 @@ void ofxVideoRecorder::close()
 
     if(bRecordVideo && bRecordAudio) {
         //set pipes to non_blocking so we dont get stuck at the final writes
-        setNonblocking(audioPipeFd);
-        setNonblocking(videoPipeFd);
+        audioThread.setPipeNonBlocking();
+        videoThread.setPipeNonBlocking();
 
         while(frames.size() > 0 && audioFrames.size() > 0) {
             // if there are frames in the queue or the thread is writing, signal them until the work is done.
@@ -872,7 +955,7 @@ void ofxVideoRecorder::close()
     }
     else if(bRecordVideo) {
         //set pipes to non_blocking so we dont get stuck at the final writes
-        setNonblocking(videoPipeFd);
+        videoThread.setPipeNonBlocking();
 
         while(frames.size() > 0) {
             // if there are frames in the queue or the thread is writing, signal them until the work is done.
@@ -881,7 +964,7 @@ void ofxVideoRecorder::close()
     }
     else if(bRecordAudio) {
         //set pipes to non_blocking so we dont get stuck at the final writes
-        setNonblocking(audioPipeFd);
+        audioThread.setPipeNonBlocking();
 
         while(audioFrames.size() > 0) {
             // if there are frames in the queue or the thread is writing, signal them until the work is done.

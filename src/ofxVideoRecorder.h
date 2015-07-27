@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ofMain.h"
+#include "Poco/Condition.h"
 #include <set>
 
 #ifdef TARGET_WIN32
@@ -71,6 +72,7 @@ public:
 #endif
     void threadedFunction();
     void signal();
+    void setPipeNonBlocking();
     bool isWriting() { return bIsWriting; }
     void close() { bClose = true; stopThread(); signal(); }
 private:
@@ -96,6 +98,7 @@ public:
 #endif
     void threadedFunction();
     void signal();
+    void setPipeNonBlocking();
     bool isWriting() { return bIsWriting; }
     void close() { bClose = true; stopThread(); signal();  }
 private:
