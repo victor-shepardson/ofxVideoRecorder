@@ -60,6 +60,7 @@ void ofxVideoDataWriterThread::setup(string filePath, lockFreeQueue<ofPixels *> 
 	queue = q;
 	bIsWriting = false;
 	bClose = false;
+	bNotifyError = false;
 	startThread(true);
 }
 #endif
@@ -68,6 +69,7 @@ void ofxVideoDataWriterThread::setup(HANDLE videoHandle_, lockFreeQueue<ofPixels
 	queue = q;
 	bIsWriting = false;
 	bClose = false;
+	bNotifyError = false;
 	videoHandle = videoHandle_;
 	startThread(true);
 }
@@ -110,6 +112,7 @@ void ofxVideoDataWriterThread::threadedFunction() {
 				}
 				else if (b_written < 0) {
 					ofLogError("ofxVideoDataWriterThread") << ofGetTimestampString("%H:%M:%S:%i") << " - write to PIPE failed with error -> " << errno << " - " << strerror(errno) << ".";
+					bNotifyError = true;
 					break;
 				}
 				else {
@@ -159,6 +162,7 @@ void ofxAudioDataWriterThread::setup(string filePath, lockFreeQueue<audioFrameSh
 	fd = -1;
 	queue = q;
 	bIsWriting = false;
+	bNotifyError = false;
 	startThread(true);
 }
 #endif
@@ -166,13 +170,13 @@ void ofxAudioDataWriterThread::setup(string filePath, lockFreeQueue<audioFrameSh
 void ofxAudioDataWriterThread::setup(HANDLE audioHandle_, lockFreeQueue<audioFrameShort *> *q) {
 	queue = q;
 	bIsWriting = false;
+	bNotifyError = false;
 	audioHandle = audioHandle_;
 	startThread(true);
 }
 #endif
 void ofxAudioDataWriterThread::threadedFunction() {
 #if defined( TARGET_OSX ) || defined( TARGET_LINUX )
-
 	if (fd == -1) {
 		//write only, fd is the handle what is the windows eqivalent
 		fd = ::open(filePath.c_str(), O_WRONLY);
@@ -195,15 +199,24 @@ void ofxAudioDataWriterThread::threadedFunction() {
 					ofLogNotice("Audio Thread") << "WriteFile to pipe failed. GLE " << GetLastError();
 				}
 #endif
-				if (b_written > 0) {
-					b_remaining -= b_written;
-					b_offset += b_written;
-				}
-				else {
-					if (bClose) {
-						break; // quit writing so we can close the file
-					}
-				}
+				if (b_written > 0){
+                    b_remaining -= b_written;
+                    b_offset += b_written;
+                }
+                else if (b_written < 0) {
+                    ofLogError("ofxAudioDataWriterThread") << ofGetTimestampString("%H:%M:%S:%i") << " - write to PIPE failed with error -> " << errno << " - " << strerror(errno) << ".";
+                    bNotifyError = true;
+                    break;
+                }
+                else {
+                    if(bClose){
+                        break; // quit writing so we can close the file
+                    }
+                }
+                
+                if (!isThreadRunning()) {
+                    ofLogWarning("ofxAudioDataWriterThread") << ofGetTimestampString("%H:%M:%S:%i") << " - The thread is not running anymore let's get out of here!";
+                }
 			}
 			bIsWriting = false;
 			delete[] frame->data;
@@ -223,6 +236,7 @@ void ofxAudioDataWriterThread::threadedFunction() {
 	CloseHandle(audioHandle);
 #endif
 }
+
 void ofxAudioDataWriterThread::signal() {
 	condition.signal();
 }
@@ -540,55 +554,57 @@ bool ofxVideoRecorder::runCustomScript(string script)
 	return bIsInitialized;
 }
 
-void ofxVideoRecorder::addFrame(const ofPixels &pixels)
+bool ofxVideoRecorder::addFrame(const ofPixels &pixels)
 {
-	if (!bIsRecording || bIsPaused) return;
+    if (!bIsRecording || bIsPaused) return false;
 
-	if (bIsInitialized && bRecordVideo)
-	{
-		int framesToAdd = 1; //default add one frame per request
+    if(bIsInitialized && bRecordVideo)
+    {
+        int framesToAdd = 1; //default add one frame per request
 
-		if ((bRecordAudio || bSysClockSync) && !bFinishing) {
+        if((bRecordAudio || bSysClockSync) && !bFinishing){
 
-			double syncDelta;
-			double videoRecordedTime = videoFramesRecorded / frameRate;
+            double syncDelta;
+            double videoRecordedTime = videoFramesRecorded / frameRate;
 
-			if (bRecordAudio) {
-				//if also recording audio, check the overall recorded time for audio and video to make sure audio is not going out of sync
-				//this also handles incoming dynamic framerate while maintaining desired outgoing framerate
-				double audioRecordedTime = (audioSamplesRecorded / audioChannels) / (double)sampleRate;
-				syncDelta = audioRecordedTime - videoRecordedTime;
-			}
-			else {
-				//if just recording video, synchronize the video against the system clock
-				//this also handles incoming dynamic framerate while maintaining desired outgoing framerate
-				syncDelta = systemClock() - videoRecordedTime;
-			}
+            if (bRecordAudio) {
+                //if also recording audio, check the overall recorded time for audio and video to make sure audio is not going out of sync
+                //this also handles incoming dynamic framerate while maintaining desired outgoing framerate
+                double audioRecordedTime = (audioSamplesRecorded/audioChannels)  / (double)sampleRate;
+                syncDelta = audioRecordedTime - videoRecordedTime;
+            }
+            else {
+                //if just recording video, synchronize the video against the system clock
+                //this also handles incoming dynamic framerate while maintaining desired outgoing framerate
+                syncDelta = systemClock() - videoRecordedTime;
+            }
 
-			if (syncDelta > 1.0 / frameRate) {
-				//no enought video frames, we need to send extra video frames.
-				int numFramesCopied = 0;
-				while (syncDelta > 1.0 / frameRate) {
-					framesToAdd++;
-					syncDelta -= 1.0 / frameRate;
-				}
-				ofLogVerbose() << "ofxVideoRecorder: recDelta = " << syncDelta << ". Not enough video frames for desired frame rate, copied this frame " << framesToAdd << " times.\n";
-			}
-			else if (syncDelta < -1.0 / frameRate) {
-				//more than one video frame is waiting, skip this frame
-				framesToAdd = 0;
-				ofLogVerbose() << "ofxVideoRecorder: recDelta = " << syncDelta << ". Too many video frames, skipping.\n";
-			}
-		}
+            if(syncDelta > 1.0/frameRate) {
+                //no enought video frames, we need to send extra video frames.
+                int numFramesCopied = 0;
+                while(syncDelta > 1.0/frameRate) {
+                    framesToAdd++;
+                    syncDelta -= 1.0/frameRate;
+                }
+                ofLogVerbose() << "ofxVideoRecorder: recDelta = " << syncDelta << ". Not enough video frames for desired frame rate, copied this frame " << framesToAdd << " times.\n";
+            }
+            else if(syncDelta < -1.0/frameRate){
+                //more than one video frame is waiting, skip this frame
+                framesToAdd = 0;
+                ofLogVerbose() << "ofxVideoRecorder: recDelta = " << syncDelta << ". Too many video frames, skipping.\n";
+            }
+        }
 
-		for (int i = 0; i < framesToAdd; i++) {
-			//add desired number of frames
-			frames.Produce(new ofPixels(pixels));
-			videoFramesRecorded++;
-		}
+        for(int i=0;i<framesToAdd;i++){
+            //add desired number of frames
+            frames.Produce(new ofPixels(pixels));
+            videoFramesRecorded++;
+        }
 
-		videoThread.signal();
-	}
+        videoThread.signal();
+		return true;
+    }
+	return false;
 }
 
 void ofxVideoRecorder::addAudioSamples(float *samples, int bufferSize, int numChannels) {
@@ -757,6 +773,16 @@ void ofxVideoRecorder::close()
 	// TODO: kill ffmpeg process if its taking too long to close for whatever reason.
 	ofLogNotice("ofxVideoRecorder") << "\n==============================================\n Closed ffmpeg \n==============================================\n";
 	bIsInitialized = false;
+}
+
+bool ofxVideoRecorder::hasVideoError()
+{
+    return videoThread.bNotifyError;
+}
+
+bool ofxVideoRecorder::hasAudioError()
+{
+    return audioThread.bNotifyError;
 }
 
 float ofxVideoRecorder::systemClock()
