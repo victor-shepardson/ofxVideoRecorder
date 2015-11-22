@@ -118,6 +118,7 @@ void ofxVideoDataWriterThread::threadedFunction() {
 					wstring ws = errorText;
 					string error(ws.begin(), ws.end());
 					ofLogNotice("Video Thread") << "WriteFile to pipe failed: " << error;
+					break;
 				}
 #endif
 				if (b_written > 0) {
@@ -436,7 +437,7 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 			// All pipe instances are busy, so wait for 5 seconds. 
 			if (!WaitNamedPipe(aPipename, 5000))
 			{
-				ofLogError("Audio Pipe") << "Could not open pipe: 20 second wait timed out.";
+				ofLogError("Audio Pipe") << "Could not open pipe: 5 second wait timed out.";
 			}
 		}
 
@@ -665,9 +666,9 @@ bool ofxVideoRecorder::runCustomScript(string script)
 	return bIsInitialized;
 }
 
-void ofxVideoRecorder::addFrame(const ofPixels &pixels)
+bool ofxVideoRecorder::addFrame(const ofPixels &pixels)
 {
-	if (!bIsRecording || bIsPaused) return;
+	if (!bIsRecording || bIsPaused) return false;
 
 	if (bIsInitialized && bRecordVideo)
 	{
@@ -703,6 +704,7 @@ void ofxVideoRecorder::addFrame(const ofPixels &pixels)
 				//more than one video frame is waiting, skip this frame
 				framesToAdd = 0;
 				ofLogVerbose() << "ofxVideoRecorder: recDelta = " << syncDelta << ". Too many video frames, skipping.\n";
+				return false;
 			}
 		}
 
@@ -711,9 +713,10 @@ void ofxVideoRecorder::addFrame(const ofPixels &pixels)
 			frames.Produce(new ofPixels(pixels));
 			videoFramesRecorded++;
 		}
-
 		videoThread.signal();
+		return true;
 	}
+	return false;
 }
 
 void ofxVideoRecorder::addAudioSamples(float *samples, int bufferSize, int numChannels) {
