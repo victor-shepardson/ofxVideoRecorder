@@ -556,13 +556,13 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 	else {
 		cmd << ffmpegLocation << " -y ";
 		if (bRecordAudio) {
-			cmd << " -f s16le -acodec " << audioCodec << " -ar " << sampleRate << " -ac " << audioChannels << " -i " << "\\\\.\\pipe\\audioPipe";
+			cmd << " -f s16le -acodec " << audioCodec << " -ar " << sampleRate << " -ac " << audioChannels << " -i " << convertWideToNarrow(aPipename);
 		}
 		else { // no audio stream
 			cmd << " -an";
 		}
 		if (bRecordVideo) { // video input options and file
-			cmd << " -r " << fps << " -s " << w << "x" << h << " -f rawvideo -pix_fmt " << pixelFormat << " -i " << "\\\\.\\pipe\\videoPipe";
+			cmd << " -r " << fps << " -s " << w << "x" << h << " -f rawvideo -pix_fmt " << pixelFormat << " -i " << convertWideToNarrow(vPipename);
 		}
 		else { // no video stream
 			cmd << " -vn";
