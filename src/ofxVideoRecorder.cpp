@@ -99,22 +99,22 @@ void ofxVideoDataWriterThread::threadedFunction() {
 #ifdef TARGET_WIN32
 				DWORD b_written;
 				if (!WriteFile(videoHandle, ((char *)frame->getPixels()) + b_offset, b_remaining, &b_written, 0)) {
-					LPTSTR errorText = NULL;
+					LPWSTR errorText = NULL;
 
 					FormatMessageW(
 						// use system message tables to retrieve error text
 						FORMAT_MESSAGE_FROM_SYSTEM
 						// allocate buffer on local heap for error text
 						| FORMAT_MESSAGE_ALLOCATE_BUFFER
-						// Important! will fail otherwise, since we're not 
+						// Important! will fail otherwise, since we're not
 						// (and CANNOT) pass insertion parameters
 						| FORMAT_MESSAGE_IGNORE_INSERTS,
 						NULL,    // unused with FORMAT_MESSAGE_FROM_SYSTEM
 						GetLastError(),
 						MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-						(LPTSTR)&errorText,  // output 
+						(LPWSTR)&errorText,  // output
 						0, // minimum size for output buffer
-						NULL);   // arguments - see note 
+						NULL);   // arguments - see note
 					wstring ws = errorText;
 					string error(ws.begin(), ws.end());
 					ofLogNotice("Video Thread") << "WriteFile to pipe failed: " << error;
@@ -218,22 +218,22 @@ void ofxAudioDataWriterThread::threadedFunction() {
 #ifdef TARGET_WIN32
 				DWORD b_written;
 				if (!WriteFile(audioHandle, ((char *)frame->data) + b_offset, b_remaining, &b_written, 0)) {
-					LPTSTR errorText = NULL;
+					LPWSTR errorText = NULL;
 
 					FormatMessageW(
 						// use system message tables to retrieve error text
 						FORMAT_MESSAGE_FROM_SYSTEM
 						// allocate buffer on local heap for error text
 						| FORMAT_MESSAGE_ALLOCATE_BUFFER
-						// Important! will fail otherwise, since we're not 
+						// Important! will fail otherwise, since we're not
 						// (and CANNOT) pass insertion parameters
 						| FORMAT_MESSAGE_IGNORE_INSERTS,
 						NULL,    // unused with FORMAT_MESSAGE_FROM_SYSTEM
 						GetLastError(),
 						MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-						(LPTSTR)&errorText,  // output 
+						(LPWSTR)&errorText,  // output
 						0, // minimum size for output buffer
-						NULL);   // arguments - see note 
+						NULL);   // arguments - see note
 					wstring ws = errorText;
 					string error(ws.begin(), ws.end());
 					ofLogNotice("Audio Thread") << "WriteFile to pipe failed: " << error;
@@ -363,12 +363,13 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 #endif
 #ifdef TARGET_WIN32
 
-		char vpip[128];
 		int num = ofRandom(1024);
+		char vpip[128];
 		sprintf(vpip, "\\\\.\\pipe\\videoPipe%d", num);
+
 		vPipename = convertCharArrayToLPCWSTR(vpip);
 
-		hVPipe = CreateNamedPipe(
+		hVPipe = CreateNamedPipeW(
 			vPipename, // name of the pipe
 			PIPE_ACCESS_OUTBOUND, // 1-way pipe -- send only
 			PIPE_TYPE_BYTE, // send data as a byte stream
@@ -384,8 +385,8 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 			{
 				ofLogError("Video Pipe") << "Could not open video pipe.";
 			}
-			// All pipe instances are busy, so wait for 5 seconds. 
-			if (!WaitNamedPipe(vPipename, 5000))
+			// All pipe instances are busy, so wait for 5 seconds.
+			if (!WaitNamedPipeW(vPipename, 5000))
 			{
 				ofLogError("Video Pipe") << "Could not open video pipe: 5 second wait timed out.";
 			}
@@ -418,7 +419,7 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 		sprintf(apip, "\\\\.\\pipe\\videoPipe%d", num);
 		aPipename = convertCharArrayToLPCWSTR(apip);
 
-		hAPipe = CreateNamedPipe(
+		hAPipe = CreateNamedPipeW(
 			aPipename,
 			PIPE_ACCESS_OUTBOUND, // 1-way pipe -- send only
 			PIPE_TYPE_BYTE, // send data as a byte stream
@@ -434,8 +435,8 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 			{
 				ofLogError("Audio Pipe") << "Could not open audio pipe.";
 			}
-			// All pipe instances are busy, so wait for 5 seconds. 
-			if (!WaitNamedPipe(aPipename, 5000))
+			// All pipe instances are busy, so wait for 5 seconds.
+			if (!WaitNamedPipeW(aPipename, 5000))
 			{
 				ofLogError("Audio Pipe") << "Could not open pipe: 5 second wait timed out.";
 			}
@@ -491,22 +492,22 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 		fSuccess = ConnectNamedPipe(hAPipe, NULL);
 		if (!fSuccess)
 		{
-			LPTSTR errorText = NULL;
+			LPWSTR errorText = NULL;
 
 			FormatMessageW(
 				// use system message tables to retrieve error text
 				FORMAT_MESSAGE_FROM_SYSTEM
 				// allocate buffer on local heap for error text
 				| FORMAT_MESSAGE_ALLOCATE_BUFFER
-				// Important! will fail otherwise, since we're not 
+				// Important! will fail otherwise, since we're not
 				// (and CANNOT) pass insertion parameters
 				| FORMAT_MESSAGE_IGNORE_INSERTS,
 				NULL,    // unused with FORMAT_MESSAGE_FROM_SYSTEM
 				GetLastError(),
 				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-				(LPTSTR)&errorText,  // output 
+				(LPWSTR)&errorText,  // output
 				0, // minimum size for output buffer
-				NULL);   // arguments - see note 
+				NULL);   // arguments - see note
 			wstring ws = errorText;
 			string error(ws.begin(), ws.end());
 			ofLogError("Audio Pipe") << "SetNamedPipeHandleState failed: " << error;
@@ -528,22 +529,22 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 		fSuccess = ConnectNamedPipe(hVPipe, NULL);
 		if (!fSuccess)
 		{
-			LPTSTR errorText = NULL;
+			LPWSTR errorText = NULL;
 
 			FormatMessageW(
 				// use system message tables to retrieve error text
 				FORMAT_MESSAGE_FROM_SYSTEM
 				// allocate buffer on local heap for error text
 				| FORMAT_MESSAGE_ALLOCATE_BUFFER
-				// Important! will fail otherwise, since we're not 
+				// Important! will fail otherwise, since we're not
 				// (and CANNOT) pass insertion parameters
 				| FORMAT_MESSAGE_IGNORE_INSERTS,
 				NULL,    // unused with FORMAT_MESSAGE_FROM_SYSTEM
 				GetLastError(),
 				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-				(LPTSTR)&errorText,  // output 
+				(LPWSTR)&errorText,  // output
 				0, // minimum size for output buffer
-				NULL);   // arguments - see note 
+				NULL);   // arguments - see note
 			wstring ws = errorText;
 			string error(ws.begin(), ws.end());
 			ofLogError("Video Pipe") << "SetNamedPipeHandleState failed: " << error;
@@ -582,22 +583,22 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 			bool fSuccess = ConnectNamedPipe(hAPipe, NULL);
 			if (!fSuccess)
 			{
-				LPTSTR errorText = NULL;
+				LPWSTR errorText = NULL;
 
 				FormatMessageW(
 					// use system message tables to retrieve error text
 					FORMAT_MESSAGE_FROM_SYSTEM
 					// allocate buffer on local heap for error text
 					| FORMAT_MESSAGE_ALLOCATE_BUFFER
-					// Important! will fail otherwise, since we're not 
+					// Important! will fail otherwise, since we're not
 					// (and CANNOT) pass insertion parameters
 					| FORMAT_MESSAGE_IGNORE_INSERTS,
 					NULL,    // unused with FORMAT_MESSAGE_FROM_SYSTEM
 					GetLastError(),
 					MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-					(LPTSTR)&errorText,  // output 
+					(LPWSTR)&errorText,  // output
 					0, // minimum size for output buffer
-					NULL);   // arguments - see note 
+					NULL);   // arguments - see note
 				wstring ws = errorText;
 				string error(ws.begin(), ws.end());
 				ofLogError("Audio Pipe") << "SetNamedPipeHandleState failed: " << error;
@@ -612,22 +613,22 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 			bool fSuccess = ConnectNamedPipe(hVPipe, NULL);
 			if (!fSuccess)
 			{
-				LPTSTR errorText = NULL;
+				LPWSTR errorText = NULL;
 
 				FormatMessageW(
 					// use system message tables to retrieve error text
 					FORMAT_MESSAGE_FROM_SYSTEM
 					// allocate buffer on local heap for error text
 					| FORMAT_MESSAGE_ALLOCATE_BUFFER
-					// Important! will fail otherwise, since we're not 
+					// Important! will fail otherwise, since we're not
 					// (and CANNOT) pass insertion parameters
 					| FORMAT_MESSAGE_IGNORE_INSERTS,
 					NULL,    // unused with FORMAT_MESSAGE_FROM_SYSTEM
 					GetLastError(),
 					MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-					(LPTSTR)&errorText,  // output 
+					(LPWSTR)&errorText,  // output
 					0, // minimum size for output buffer
-					NULL);   // arguments - see note 
+					NULL);   // arguments - see note
 				wstring ws = errorText;
 				string error(ws.begin(), ws.end());
 				ofLogError("Video Pipe") << "SetNamedPipeHandleState failed: " << error;
@@ -836,7 +837,7 @@ void ofxVideoRecorder::close()
 
 	ffmpegThread.waitForThread();
 #endif
-#ifdef TARGET_WIN32 
+#ifdef TARGET_WIN32
 	if (bRecordVideo) {
 		videoThread.close();
 	}

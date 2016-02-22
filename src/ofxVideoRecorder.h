@@ -5,7 +5,7 @@
 #include <set>
 
 #ifdef TARGET_WIN32
-#include <windows.h> 
+#include <windows.h>
 #include <stdio.h>
 #include <conio.h>
 #include <tchar.h>
@@ -223,7 +223,7 @@ private:
 #ifdef TARGET_WIN32
 	HANDLE hVPipe;
 	HANDLE hAPipe;
-	LPTSTR vPipename;
-	LPTSTR aPipename;
+	LPWSTR vPipename;
+	LPWSTR aPipename;
 #endif
 };
