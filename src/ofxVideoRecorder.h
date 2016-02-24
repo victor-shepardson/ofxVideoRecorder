@@ -131,6 +131,8 @@ public:
 	void setAudioFileExtension(string extension) { audioFileExt = extension; }
 	void setVideoCodec(string codec) { videoCodec = codec; }
 	void setVideoBitrate(string bitrate) { videoBitrate = bitrate; }
+	void setAdditionalVideoFlags(string flags){ additionalVideoFlags = flags; }
+	void setAdditionalAudioFlags(string flags){ additionalAudioFlags = flags; }
 
 	void setPixelFormat(string pixelF) { //rgb24 || gray, default is rgb24
 		pixelFormat = pixelF;
@@ -185,7 +187,7 @@ private:
 	string audioFileExt;
 	string videoPipePath, audioPipePath;
 	string ffmpegLocation;
-	string videoCodec, audioCodec, videoBitrate, audioBitrate, pixelFormat;
+	string videoCodec, audioCodec, videoBitrate, audioBitrate, pixelFormat, additionalVideoFlags, additionalAudioFlags;
 	int width, height, sampleRate, audioChannels;
 	float frameRate;
 

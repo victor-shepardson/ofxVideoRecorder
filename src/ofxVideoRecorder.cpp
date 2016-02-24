@@ -297,6 +297,8 @@ ofxVideoRecorder::ofxVideoRecorder()
 	pixelFormat = "rgb24";
 	movFileExt = ".mp4";
 	audioFileExt = ".m4a";
+	additionalVideoFlags = "";
+	additionalAudioFlags = "";
 	aThreadRunning = false;
 	vThreadRunning = false;
 }
@@ -450,13 +452,13 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 #if defined( TARGET_OSX ) || defined( TARGET_LINUX )
 	cmd << "bash --login -c '" << ffmpegLocation << (bIsSilent ? " -loglevel quiet " : " ") << "-y";
 	if (bRecordAudio) {
-		cmd << " -acodec pcm_s16le -f s16le -ar " << sampleRate << " -ac " << audioChannels << " -i " << audioPipePath;
+		cmd << " -acodec pcm_s16le -f s16le -ar " << sampleRate << " -ac " << audioChannels << " -i " << audioPipePath << " " << additionalAudioFlags;
 	}
 	else { // no audio stream
 		cmd << " -an";
 	}
 	if (bRecordVideo) { // video input options and file
-		cmd << " -r " << fps << " -s " << w << "x" << h << " -f rawvideo -pix_fmt " << pixelFormat << " -i " << videoPipePath << " -r " << fps;
+		cmd << " -r " << fps << " -s " << w << "x" << h << " -f rawvideo -pix_fmt " << pixelFormat << " -i " << videoPipePath << " -r " << fps << " " << additionalVideoFlags;
 	}
 	else { // no video stream
 		cmd << " -vn";
@@ -484,7 +486,7 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 
 		stringstream aCmd;
 		aCmd << ffmpegLocation << " -y " << " -f s16le -acodec " << audioCodec << " -ar " << sampleRate << " -ac " << audioChannels;
-		aCmd << " -i " << convertWideToNarrow(aPipename) << " -b:a " << audioBitrate << " " << outputString << "_atemp" << audioFileExt;
+		aCmd << " -i " << convertWideToNarrow(aPipename) << " -b:a " << audioBitrate << " " << additionalAudioFlags << " " << outputString << "_atemp" << audioFileExt;
 
 		ffmpegAudioThread.setup(aCmd.str());
 		ofLogNotice("FFMpeg Command") << aCmd.str() << endl;
@@ -521,7 +523,7 @@ bool ofxVideoRecorder::setupCustomOutput(int w, int h, float fps, int sampleRate
 
 		stringstream vCmd;
 		vCmd << ffmpegLocation << " -y " << " -r " << fps << " -s " << w << "x" << h << " -f rawvideo -pix_fmt " << pixelFormat;
-		vCmd << " -i " << convertWideToNarrow(vPipename) << " -vcodec " << videoCodec << " -b:v " << videoBitrate << " " << outputString << "_vtemp" << movFileExt;
+		vCmd << " -i " << convertWideToNarrow(vPipename) << " -vcodec " << videoCodec << " -b:v " << videoBitrate << " " << additionalVideoFlags << " " << outputString << "_vtemp" << movFileExt;
 
 		ffmpegVideoThread.setup(vCmd.str());
 		ofLogNotice("FFMpeg Command") << vCmd.str() << endl;
