@@ -131,6 +131,7 @@ public:
 	void setAudioFileExtension(string extension) { audioFileExt = extension; }
 	void setVideoCodec(string codec) { videoCodec = codec; }
 	void setVideoBitrate(string bitrate) { videoBitrate = bitrate; }
+	void setAudioBitrate(string bitrate) { audioBitrate = bitrate; }
 	void setAdditionalVideoFlags(string flags){ additionalVideoFlags = flags; }
 	void setAdditionalAudioFlags(string flags){ additionalAudioFlags = flags; }
 

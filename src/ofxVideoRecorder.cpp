@@ -290,14 +290,14 @@ ofxVideoRecorder::ofxVideoRecorder()
 {
 	bIsInitialized = false;
 	ffmpegLocation = "ffmpeg";
-	videoCodec = "mpeg4";
+	videoCodec = "libx264";
 	audioCodec = "pcm_s16le";
-	videoBitrate = "2000k";
-	audioBitrate = "128k";
+	videoBitrate = "10000k";
+	audioBitrate = "320k";
 	pixelFormat = "rgb24";
 	movFileExt = ".mp4";
 	audioFileExt = ".m4a";
-	additionalVideoFlags = "";
+	additionalVideoFlags = "-preset ultrafast";
 	additionalAudioFlags = "";
 	aThreadRunning = false;
 	vThreadRunning = false;
