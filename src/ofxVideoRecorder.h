@@ -155,7 +155,7 @@ public:
 	int getHeight() { return height; }
 
 private:
-
+#ifdef TARGET_WIN32
 	std::wstring convertNarrowToWide(const std::string& as) {
 		if (as.empty())    return std::wstring();
 		size_t reqLength = ::MultiByteToWideChar(CP_UTF8, 0, as.c_str(), (int)as.length(), 0, 0);
@@ -181,6 +181,7 @@ private:
 		}
 		return stm.str();
 	}
+#endif
 
 	string filePath;
 	string fileName;
